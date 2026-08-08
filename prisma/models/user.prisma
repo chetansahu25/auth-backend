@@ -1,0 +1,24 @@
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  DISABLED
+  DELETED
+}
+
+model User {
+  id              String        @id @default(cuid())
+  username        String        @unique
+  name            String?
+  email           String        @unique
+  isEmailVerified Boolean       @default(false)
+  accountStatus   AccountStatus @default(ACTIVE)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  passwordCredentials PasswordCredentials?
+  authAccounts        AuthAccounts[]
+  otpChallenges       OtpChallenges[]
+  sessions            Sessions[]
+
+  @@map("users")
+}

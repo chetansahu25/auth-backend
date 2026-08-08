@@ -1,0 +1,72 @@
+//Enums for models
+enum Provider {
+  GOOGLE
+  GITHUB
+}
+
+enum Purpose {
+  LOGIN
+  PASSWORD_RESET
+  EMAIL_VERIFICATION
+}
+
+//models
+model PasswordCredentials {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hashedPassword String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("password_credentials")
+}
+
+model AuthAccounts {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider       Provider
+  providerUserId String
+  email          String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, provider])
+  @@unique([provider, providerUserId])
+  @@map("auth_accounts")
+}
+
+model OtpChallenges {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  destination String
+  purpose     Purpose
+  codeHash    String
+  expiresAt   DateTime
+  attempts    Int       @default(0)
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@map("otp_challenges")
+}
+
+model Sessions {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionTokenHash String    @unique
+  deviceId         String
+  deviceName       String
+  userAgent        String
+  ipAddress        String
+  lastUsedAt       DateTime
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([userId, deviceId])
+  @@map("sessions")
+}
