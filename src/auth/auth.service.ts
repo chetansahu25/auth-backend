@@ -1,44 +1,62 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { RegisterUserDto } from '../user/dto/register-user.dto';
 import { UserService } from '../user/user.service';
 import AuthUtility from '../utils/auth.utility';
+import { EmailService } from '../email/email.service';
+import { RegisterAuthDto } from './dto/register-auth.dto';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly userService: UserService,
+    private readonly emailService: EmailService
   ) {}
 
-  async registerUser(registerUserDto: RegisterUserDto) {
+  async registerUser(registerAuthDto: RegisterAuthDto) {
 
     //save and get Id of user
-    const { id } = await this.userService.createUser(registerUserDto);
+    const { id, email } = await this.userService.createUser(registerAuthDto);
 
     //generating hashed password
-    const hash = await AuthUtility.generatePasswordHash(
-      registerUserDto.password,
+    const hashedPassword = await AuthUtility.generateHash(
+      registerAuthDto.password,
     );
 
     //saving password to db
     const savePasswordCredentials = this.prisma.passwordCredentials.create({
       data: {
         userId: id,
-        hashedPassword: hash,
+        hashedPassword: hashedPassword,
       },
     });
 
-    //sending verification email 
+    //generating otp
+    const otp: number = await AuthUtility.generateOtp();
+    
+
+    //sending verification email
+    const sendEmail = this.emailService.sendOtp(email, otp) 
+    
 
     //create otp hash
+    const otpHash = await AuthUtility.generateHash(String(otp))
 
-    //declare otp purpose and id
+    
 
-    //save otp details to db
+  const saveOtp = await this.prisma.otpChallenges.create({
+    data: {
+      userId: id,
+      destination: email,
+      purpose: 'EMAIL_VERIFICATION',
+      codeHash: otpHash,
+      expiresAt: new Date(new Date().getTime() + 15*60*1000)
+    }
+  })
 
 
     //return otp id to the user
+    return saveOtp.id;
 
 
   }

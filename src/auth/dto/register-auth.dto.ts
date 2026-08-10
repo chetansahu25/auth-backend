@@ -1,5 +1,5 @@
 import { IsAlphanumeric, IsEmail, IsString } from 'class-validator'
-export class RegisterUserDto {
+export class RegisterAuthDto {
   @IsEmail()
   email!: string;
 
@@ -8,5 +8,9 @@ export class RegisterUserDto {
 
   @IsString()
   name!: string;
+
+  @IsString()
+  password!: string;
+  
 
 } 
