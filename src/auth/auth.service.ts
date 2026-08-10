@@ -1,20 +1,45 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import * as bcrypt from 'bcryptjs'
+import { RegisterUserDto } from '../user/dto/register-user.dto';
+import { UserService } from '../user/user.service';
+import AuthUtility from '../utils/auth.utility';
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly prisma: PrismaService){}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly userService: UserService,
+  ) {}
 
-  async hashPassword(password: string){
-    const saltRounds = 12;
-    const salt: string = await bcrypt.genSalt(saltRounds);
-    const hash = await bcrypt.hash(password, salt);
-    
-    return hash;
-  }
+  async registerUser(registerUserDto: RegisterUserDto) {
 
-  async savePasswordCredentials(UserId: string, password: string){
-    const hashedPassword = await this.hashPassword(password)
+    //save and get Id of user
+    const { id } = await this.userService.createUser(registerUserDto);
+
+    //generating hashed password
+    const hash = await AuthUtility.generatePasswordHash(
+      registerUserDto.password,
+    );
+
+    //saving password to db
+    const savePasswordCredentials = this.prisma.passwordCredentials.create({
+      data: {
+        userId: id,
+        hashedPassword: hash,
+      },
+    });
+
+    //sending verification email 
+
+    //create otp hash
+
+    //declare otp purpose and id
+
+    //save otp details to db
+
+
+    //return otp id to the user
+
+
   }
 }
