@@ -135,4 +135,49 @@ export class AuthService {
       expiresIn: 900, 
     };
   }
+
+  async refreshSession(refreshToken: string) {
+    const tokenHash = await AuthUtility.generateHash(refreshToken);
+
+    const session = await this.prisma.sessions.findUnique({
+      where: { sessionTokenHash: tokenHash },
+    });
+
+    if (!session || session.revokedAt || session.expiresAt < new Date()) {
+      throw new UnauthorizedException('Invalid or expired session');
+    }
+
+    // Rotate refresh token
+    const newRefreshToken = randomUUID();
+    const newTokenHash = await AuthUtility.generateHash(newRefreshToken);
+
+    await this.prisma.sessions.update({
+      where: { id: session.id },
+      data: {
+        sessionTokenHash: newTokenHash,
+        lastUsedAt: new Date(),
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    const accessToken = this.jwtService.sign({
+      sub: session.userId,
+      sessionId: session.id,
+    });
+
+    return {
+      accessToken,
+      refreshToken: newRefreshToken,
+      expiresIn: 900,
+    };
+  }
+
+  async revokeSession(refreshToken: string) {
+    const tokenHash = await AuthUtility.generateHash(refreshToken);
+
+    await this.prisma.sessions.updateMany({
+      where: { sessionTokenHash: tokenHash },
+      data: { revokedAt: new Date() },
+    });
+  }
 }
