@@ -62,7 +62,7 @@ model Sessions {
   deviceName       String
   userAgent        String
   ipAddress        String
-  lastUsedAt       DateTime
+  lastUsedAt       DateTime  @default(now())
   expiresAt        DateTime
   revokedAt        DateTime?
   createdAt        DateTime  @default(now())
