@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserService } from '../user/user.service';
 import AuthUtility from '../utils/auth.utility';
@@ -21,6 +21,46 @@ export class AuthService {
 
   async registerUser(registerAuthDto: RegisterAuthDto) {
     //save and get Id of user
+    const user = await this.prisma.user.findUnique({
+      where: { email: registerAuthDto.email }
+    })
+
+    if(user){
+      if(user.isEmailVerified == true){
+        throw new ConflictException(
+          "User Already Exist"
+        )
+      }
+      await this.prisma.otpChallenges.updateMany({
+        where: {
+          userId: user.id
+        },
+        data: {
+          expiresAt: new Date() 
+        }
+
+      })
+      const otp: number = await AuthUtility.generateOtp();
+
+      const sendEmail = await this.emailService.sendOtp(user.email, otp);
+
+    //create otp hash
+    const otpHash = await AuthUtility.generateHash(String(otp));
+
+    const saveOtp = await this.prisma.otpChallenges.create({
+      data: {
+        userId: user.id,
+        destination: user.email,
+        purpose: 'EMAIL_VERIFICATION',
+        codeHash: otpHash,
+        expiresAt: new Date(new Date().getTime() + 15 * 60 * 1000),
+      },
+    });
+
+    //return otp id to the user
+    return saveOtp.id;
+
+    }
     const { id, email } = await this.userService.createUser(registerAuthDto);
 
     //generating hashed password
