@@ -7,7 +7,8 @@ import { RegisterAuthDto } from './dto/register-auth.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { SessionMetadata } from '../types/auth.types';
 import { randomUUID } from 'node:crypto';
-import { JwtService } from '@nestjs/jwt'
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
@@ -65,7 +66,7 @@ export class AuthService {
 
     //fetch the db entry [id, codehash]
     const otpChallenges = await this.prisma.otpChallenges.findUnique({
-      where: { 
+      where: {
         id,
       },
     });
@@ -129,8 +130,8 @@ export class AuthService {
       },
       data: {
         isEmailVerified: true,
-      }
-    })
+      },
+    });
 
     // Generate JWT access token
     const accessToken = this.jwtService.sign({
@@ -140,9 +141,9 @@ export class AuthService {
 
     // Return tokens to client
     return {
-      accessToken, 
-      refreshToken: sessionToken, 
-      expiresIn: 900, 
+      accessToken,
+      refreshToken: sessionToken,
+      expiresIn: 900,
     };
   }
 

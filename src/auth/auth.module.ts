@@ -10,7 +10,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { SessionStrategy } from './strategies/session.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { SessionAuthGuard } from './guards/session-auth.guard';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 
 @Module({
   imports: [
@@ -19,10 +19,13 @@ import { ConfigModule } from '@nestjs/config';
     EmailModule,
     PassportModule,
     ConfigModule,
-    JwtModule.register({
-      secret: process.env.JWT_SECRET_KEY,
-      signOptions: { expiresIn: '15m' },
-    }),
+JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.getOrThrow<string>('JWT_SECRET_KEY'),
+        signOptions: { expiresIn: '15m' },
+      }),    }),
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, SessionStrategy, JwtAuthGuard, SessionAuthGuard],
