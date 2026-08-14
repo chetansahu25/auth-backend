@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserService } from '../user/user.service';
 import AuthUtility from '../utils/auth.utility';
@@ -9,6 +14,7 @@ import { SessionMetadata } from '../types/auth.types';
 import { randomUUID } from 'node:crypto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { LoginDto } from './dto/login.dto';
 
 @Injectable()
 export class AuthService {
@@ -19,47 +25,66 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
+  private async createSession(
+    userId: string,
+    metadata: SessionMetadata & { deviceId: string; deviceName: string },
+  ): Promise<{ id: string; refreshToken: string }> {
+    const sessionToken = randomUUID();
+    const sessionTokenHash = await AuthUtility.generateTokenHash(sessionToken);
+
+    const session = await this.prisma.sessions.create({
+      data: {
+        userId,
+        sessionTokenHash,
+        deviceId: metadata.deviceId,
+        deviceName: metadata.deviceName,
+        userAgent: metadata.userAgent,
+        ipAddress: metadata.ipAddress,
+        lastUsedAt: new Date(),
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    return { id: session.id, refreshToken: sessionToken };
+  }
+
   async registerUser(registerAuthDto: RegisterAuthDto) {
     //save and get Id of user
     const user = await this.prisma.user.findUnique({
-      where: { email: registerAuthDto.email }
-    })
+      where: { email: registerAuthDto.email },
+    });
 
-    if(user){
-      if(user.isEmailVerified == true){
-        throw new ConflictException(
-          "User Already Exist"
-        )
+    if (user) {
+      if (user.isEmailVerified == true) {
+        throw new ConflictException('User Already Exist');
       }
       await this.prisma.otpChallenges.updateMany({
         where: {
-          userId: user.id
+          userId: user.id,
         },
         data: {
-          expiresAt: new Date() 
-        }
-
-      })
+          expiresAt: new Date(),
+        },
+      });
       const otp: number = await AuthUtility.generateOtp();
 
       const sendEmail = await this.emailService.sendOtp(user.email, otp);
 
-    //create otp hash
-    const otpHash = await AuthUtility.generateHash(String(otp));
+      //create otp hash
+      const otpHash = await AuthUtility.generateHash(String(otp));
 
-    const saveOtp = await this.prisma.otpChallenges.create({
-      data: {
-        userId: user.id,
-        destination: user.email,
-        purpose: 'EMAIL_VERIFICATION',
-        codeHash: otpHash,
-        expiresAt: new Date(new Date().getTime() + 15 * 60 * 1000),
-      },
-    });
+      const saveOtp = await this.prisma.otpChallenges.create({
+        data: {
+          userId: user.id,
+          destination: user.email,
+          purpose: 'EMAIL_VERIFICATION',
+          codeHash: otpHash,
+          expiresAt: new Date(new Date().getTime() + 15 * 60 * 1000),
+        },
+      });
 
-    //return otp id to the user
-    return saveOtp.id;
-
+      //return otp id to the user
+      return saveOtp.id;
     }
     const { id, email } = await this.userService.createUser(registerAuthDto);
 
@@ -148,19 +173,11 @@ export class AuthService {
       where: { id },
       data: { consumedAt: new Date() },
     });
-    const sessionToken = randomUUID();
-    const sessionTokenHash = await AuthUtility.generateTokenHash(sessionToken);
-    const session = await this.prisma.sessions.create({
-      data: {
-        deviceId,
-        deviceName,
-        userAgent,
-        ipAddress,
-        userId: otpChallenges.userId,
-        sessionTokenHash,
-        lastUsedAt: new Date(),
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      },
+
+    const session = await this.createSession(otpChallenges.userId, {
+      ...metadata,
+      deviceId,
+      deviceName,
     });
 
     // set is email verified true
@@ -182,7 +199,7 @@ export class AuthService {
     // Return tokens to client
     return {
       accessToken,
-      refreshToken: sessionToken,
+      refreshToken: session.refreshToken,
       expiresIn: 900,
     };
   }
@@ -240,5 +257,59 @@ export class AuthService {
       },
       data: { revokedAt: new Date() },
     });
+  }
+
+  async login(data: LoginDto, metadata: SessionMetadata) {
+    const credentials = { 
+    email:data.email, 
+    username: data.username, 
+    password: data.password
+  }
+  const newMetadata = {
+    ipAddress: metadata.ipAddress,
+    userAgent: metadata.userAgent,
+    deviceId: data.deviceId,
+    deviceName: data.deviceName,
+  }
+    
+    const user = await this.prisma.user.findFirst({
+      where: data.email ? { email: data.email } : { username: data.username },
+      include: {
+        passwordCredentials: true,
+      },
+    });
+
+    if (!user || user.accountStatus == 'DELETED') {
+      throw new NotFoundException("User Doesn't Exist");
+    }
+
+    if (!user.passwordCredentials) {
+      // User exists but has no password (e.g., OAuth-only account)
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const isCredentialMatched = await AuthUtility.verifyHash(
+      data.password,
+      user.passwordCredentials.hashedPassword,
+    );
+
+    if (!isCredentialMatched) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const session = await this.createSession(user.id, newMetadata)
+
+    const accessToken = this.jwtService.sign({
+      sub: user.id,
+      sessionId: session.id,
+    });
+
+    // Return tokens to client
+    return {
+      accessToken,
+      refreshToken: session.refreshToken,
+      expiresIn: 900,
+    };
+
   }
 }

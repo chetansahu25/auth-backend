@@ -5,6 +5,7 @@ import { RegisterAuthDto } from './dto/register-auth.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { LoginDto } from './dto/login.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -69,6 +70,30 @@ export class AuthController {
       accessToken: result.accessToken,
       expiresIn: result.expiresIn,
     };
+  }
+  @Post('login')
+  async login( 
+    @Body() data: LoginDto,
+    @Ip() ipAddress: string,
+    @Headers('user-agent') userAgent: string,
+    @Res({ passthrough: true }) res: Response,
+ ){
+    const result = await this.authService.login(data, {ipAddress, userAgent})
+    
+    res.cookie('refreshToken', result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      path: '/auth',
+    });
+
+    return {
+      accessToken: result.accessToken,
+      expiresIn: result.expiresIn,
+    };
+
+
   }
 
   @Post('logout')
