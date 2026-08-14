@@ -61,3 +61,4 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 .windsurf
 .claude
 skills-lock.json
+.pnpm-store/*

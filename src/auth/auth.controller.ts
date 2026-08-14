@@ -1,8 +1,10 @@
-import { Body, Controller, Headers, Ip, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Headers, Ip, Post, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterAuthDto } from './dto/register-auth.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { CurrentUser } from './decorators/current-user.decorator';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -71,6 +73,7 @@ export class AuthController {
 
   @Post('logout')
   async logout(
+    @CurrentUser('userId') userId: string,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
@@ -83,5 +86,20 @@ export class AuthController {
     res.clearCookie('refreshToken', { path: '/auth' });
 
     return { message: 'Logged out' };
+  }
+
+
+  @UseGuards(JwtAuthGuard)
+  @Post('logout-all')
+  async logoutAll(
+    @CurrentUser('userId') userId: string,
+    @Res({ passthrough: true }) res: Response,
+  ){
+    const result = this.authService.revokeAllSessions(userId)
+
+    return {
+      Code: 200,
+      message: "Success",
+    }
   }
 }

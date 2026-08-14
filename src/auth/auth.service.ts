@@ -108,7 +108,7 @@ export class AuthService {
       data: { consumedAt: new Date() },
     });
     const sessionToken = randomUUID();
-    const sessionTokenHash = await AuthUtility.generateHash(sessionToken);
+    const sessionTokenHash = await AuthUtility.generateTokenHash(sessionToken);
     const session = await this.prisma.sessions.create({
       data: {
         deviceId,
@@ -121,6 +121,16 @@ export class AuthService {
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       },
     });
+
+    // set is email verified true
+    const updateVerification = await this.prisma.user.update({
+      where: {
+        id: otpChallenges.userId,
+      },
+      data: {
+        isEmailVerified: true,
+      }
+    })
 
     // Generate JWT access token
     const accessToken = this.jwtService.sign({
@@ -137,7 +147,7 @@ export class AuthService {
   }
 
   async refreshSession(refreshToken: string) {
-    const tokenHash = await AuthUtility.generateHash(refreshToken);
+    const tokenHash = await AuthUtility.generateTokenHash(refreshToken);
 
     const session = await this.prisma.sessions.findUnique({
       where: { sessionTokenHash: tokenHash },
@@ -149,7 +159,7 @@ export class AuthService {
 
     // Rotate refresh token
     const newRefreshToken = randomUUID();
-    const newTokenHash = await AuthUtility.generateHash(newRefreshToken);
+    const newTokenHash = await AuthUtility.generateTokenHash(newRefreshToken);
 
     await this.prisma.sessions.update({
       where: { id: session.id },
@@ -173,10 +183,20 @@ export class AuthService {
   }
 
   async revokeSession(refreshToken: string) {
-    const tokenHash = await AuthUtility.generateHash(refreshToken);
+    const tokenHash = await AuthUtility.generateTokenHash(refreshToken);
 
     await this.prisma.sessions.updateMany({
       where: { sessionTokenHash: tokenHash },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  async revokeAllSessions(userId: string) {
+    await this.prisma.sessions.updateMany({
+      where: {
+        userId,
+        revokedAt: null,
+      },
       data: { revokedAt: new Date() },
     });
   }
