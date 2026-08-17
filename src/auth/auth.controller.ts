@@ -120,7 +120,7 @@ export class AuthController {
     @CurrentUser('userId') userId: string,
     @Res({ passthrough: true }) res: Response,
   ){
-    const result = this.authService.revokeAllSessions(userId)
+    const result = await this.authService.revokeAllSessions(userId)
 
     return {
       Code: 200,
