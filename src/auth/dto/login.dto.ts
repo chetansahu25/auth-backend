@@ -1,8 +1,10 @@
-import { IsAlphanumeric, IsEmail, IsString } from 'class-validator'
+import { IsAlphanumeric, IsEmail, IsOptional, IsString } from 'class-validator'
 export class LoginDto {
+  @IsOptional()
   @IsEmail()
   email?: string;
 
+  @IsOptional()
   @IsAlphanumeric()
   username?: string;
 

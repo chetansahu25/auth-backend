@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -83,8 +84,6 @@ export class AuthService {
         },
       });
 
-      //return otp id to the user
-      return saveOtp.id;
     }
     const { id, email } = await this.userService.createUser(registerAuthDto);
 
@@ -94,7 +93,7 @@ export class AuthService {
     );
 
     //saving password to db
-    const savePasswordCredentials = this.prisma.passwordCredentials.create({
+    const savePasswordCredentials = await this.prisma.passwordCredentials.create({
       data: {
         userId: id,
         hashedPassword: hashedPassword,
@@ -260,20 +259,16 @@ export class AuthService {
   }
 
   async login(data: LoginDto, metadata: SessionMetadata) {
-    const credentials = { 
-    email:data.email, 
-    username: data.username, 
-    password: data.password
-  }
-  const newMetadata = {
-    ipAddress: metadata.ipAddress,
-    userAgent: metadata.userAgent,
-    deviceId: data.deviceId,
-    deviceName: data.deviceName,
-  }
+    const newMetadata = {
+      ipAddress: metadata.ipAddress,
+      userAgent: metadata.userAgent,
+      deviceId: data.deviceId,
+      deviceName: data.deviceName,
+    };
+    const findOption = data.email ? { email: data.email } : { username: data.username }
     
     const user = await this.prisma.user.findFirst({
-      where: data.email ? { email: data.email } : { username: data.username },
+      where: findOption,
       include: {
         passwordCredentials: true,
       },
@@ -297,7 +292,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const session = await this.createSession(user.id, newMetadata)
+    const session = await this.createSession(user.id, newMetadata);
 
     const accessToken = this.jwtService.sign({
       sub: user.id,
@@ -310,6 +305,5 @@ export class AuthService {
       refreshToken: session.refreshToken,
       expiresIn: 900,
     };
-
   }
 }
